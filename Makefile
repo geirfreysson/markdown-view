@@ -16,15 +16,19 @@ $(BIN): src/macos.m $(MAC_COMMON) src/native.h src/render.h src/entities.h
 	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(MAC_FLAGS) src/macos.m $(MAC_COMMON) -framework Cocoa -framework UniformTypeIdentifiers -o "$@"
 $(BUILD)/markdown-preview: src/quicklook.m $(MAC_COMMON) src/native.h src/render.h src/entities.h
+	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(MAC_FLAGS) -fapplication-extension src/quicklook.m $(MAC_COMMON) -framework Cocoa -framework QuickLookUI -o "$@"
 $(BUILD)/test-quicklook: src/quicklook.m $(MAC_COMMON) src/native.h src/render.h src/entities.h
+	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(MAC_FLAGS) -DMDV_QUICKLOOK_TEST src/quicklook.m $(MAC_COMMON) -framework Cocoa -framework QuickLookUI -o "$@"
 $(BUILD)/mdv-integrate: src/integration.m
+	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -Wno-deprecated-declarations $(MAC_FLAGS) src/integration.m -framework Cocoa -framework CoreServices -framework UniformTypeIdentifiers -o "$@"
 $(BUILD)/macos.stamp: $(BUILD)/mdv-integrate $(BIN) $(BUILD)/markdown-preview packaging/Info.plist packaging/QuickLook-Info.plist packaging/QuickLook.entitlements
 	mkdir -p "$(APP)/Contents/MacOS"
 	cp $(BIN) "$(APP)/Contents/MacOS/markdown-view"
 	cp $(BUILD)/mdv-integrate "$(APP)/Contents/MacOS/mdv-integrate"
+	codesign --force --sign - "$(APP)/Contents/MacOS/mdv-integrate"
 	cp packaging/Info.plist "$(APP)/Contents/Info.plist"
 	mkdir -p "$(APP)/Contents/PlugIns/MarkdownPreview.appex/Contents/MacOS"
 	cp $(BUILD)/markdown-preview "$(APP)/Contents/PlugIns/MarkdownPreview.appex/Contents/MacOS/markdown-preview"
