@@ -38,7 +38,7 @@ static double physicalMemoryMiB(void) {
 - (instancetype)init {
     NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,860,680) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
     if((self=[super initWithWindow:window])) {
-        _fontSize=16; window.title=@"Markdown View"; window.delegate=self;
+        _fontSize=15; window.title=@"Markdown View"; window.delegate=self;
         window.minSize=NSMakeSize(400,280); window.releasedWhenClosed=NO;
         NSView *root=window.contentView;
         NSStackView *bar=[NSStackView new]; bar.orientation=NSUserInterfaceLayoutOrientationHorizontal; bar.spacing=8;
@@ -48,8 +48,8 @@ static double physicalMemoryMiB(void) {
         _search=[NSSearchField new]; _search.placeholderString=@"Find in document"; _search.target=self; _search.action=@selector(findNext:);
         _search.sendsWholeSearchString=YES; _search.sendsSearchStringImmediately=NO; [bar addArrangedSubview:_search];
         [_search.widthAnchor constraintGreaterThanOrEqualToConstant:160].active=YES;
-        NSScrollView *scroll=[NSScrollView new]; scroll.hasVerticalScroller=YES; scroll.hasHorizontalScroller=NO; scroll.autohidesScrollers=YES;
-        _text=[[NSTextView alloc] initWithFrame:NSMakeRect(0,0,800,600)];
+        NSScrollView *scroll=[NSScrollView new]; scroll.hasVerticalScroller=YES; scroll.hasHorizontalScroller=YES; scroll.autohidesScrollers=YES;
+        _text=mdv_text_view(NSMakeRect(0,0,800,600));
         _text.editable=NO; _text.selectable=YES; _text.richText=YES; _text.importsGraphics=NO; _text.usesFindBar=NO; _text.delegate=self;
         _text.verticallyResizable=YES; _text.horizontallyResizable=NO; _text.autoresizingMask=NSViewWidthSizable;
         _text.textContainerInset=NSMakeSize(36,28);
@@ -90,6 +90,7 @@ static double physicalMemoryMiB(void) {
                 }
                 NSRange selection=self.text.selectedRange;
                 [self.text.textStorage setAttributedString:rendered];
+                mdv_update_reading_layout(self.text);
                 self.hasDocument=YES;
                 if(NSMaxRange(selection)<=self.text.string.length) self.text.selectedRange=selection;
                 if(profileLaunch) {
@@ -106,7 +107,7 @@ static double physicalMemoryMiB(void) {
 - (void)reload:(id)sender { if(self.url) [self loadURL:self.url]; }
 - (void)zoomIn:(id)sender { self.fontSize=MIN(32,self.fontSize+2); [self reload:sender]; }
 - (void)zoomOut:(id)sender { self.fontSize=MAX(10,self.fontSize-2); [self reload:sender]; }
-- (void)actualSize:(id)sender { self.fontSize=16; [self reload:sender]; }
+- (void)actualSize:(id)sender { self.fontSize=15; [self reload:sender]; }
 - (void)find:(id)sender { [self.window makeFirstResponder:self.search]; [self.search selectText:sender]; }
 - (void)findDirection:(BOOL)backward {
     NSString *query=self.search.stringValue; if(!query.length) return;
@@ -182,13 +183,13 @@ int main(int argc, const char **argv) {
             CFAbsoluteTime start=CFAbsoluteTimeGetCurrent();
             NSURL *url=[NSURL fileURLWithPath:[NSString stringWithUTF8String:argv[2]]]; NSError *error=nil;
             NSData *data=[NSData dataWithContentsOfURL:url options:NSDataReadingMappedIfSafe error:&error];
-            NSAttributedString *result=data?mdv_render_data(data,url,16,&error):nil;
+            NSAttributedString *result=data?mdv_render_data(data,url,15,&error):nil;
             if(!result) { fprintf(stderr,"%s\n",error.localizedDescription.UTF8String); return 1; }
             struct mach_task_basic_info info; mach_msg_type_number_t count=MACH_TASK_BASIC_INFO_COUNT;
             task_info(mach_task_self(),MACH_TASK_BASIC_INFO,(task_info_t)&info,&count);
             printf("Rendered %lu bytes → %lu characters in %.2f ms; RSS %.2f MiB; physical footprint %.2f MiB\n",(unsigned long)data.length,(unsigned long)result.length,(CFAbsoluteTimeGetCurrent()-start)*1000,info.resident_size/1048576.0,physicalMemoryMiB());
             if(!strcmp(argv[1],"--smoke-test") || !strcmp(argv[1],"--screenshot")) {
-                Viewer *v=[Viewer new]; [v.text.textStorage setAttributedString:result]; [v.window.contentView layoutSubtreeIfNeeded];
+                Viewer *v=[Viewer new]; [v.text.textStorage setAttributedString:result]; mdv_update_reading_layout(v.text); [v.window.contentView layoutSubtreeIfNeeded];
                 if(!strcmp(argv[1],"--smoke-test")) { v.search.stringValue=@"Markdown"; [v findNext:nil]; }
                 if(!strcmp(argv[1],"--screenshot")) {
                     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];

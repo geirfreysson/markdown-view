@@ -13,7 +13,7 @@ Markdown View is a small, read-only desktop app for **macOS and Linux**. It uses
 
 ## What it does
 
-- Renders headings, bold, italic, strikethrough, quotes, lists, task lists, code, links, basic tables, and local images.
+- Renders headings, bold, italic, strikethrough, quotes, lists, task lists, code, links, tables with wrapping cells, and local images.
 - Lets you select and copy text, search within a document, and adjust the text size.
 - Opens multiple files in separate windows and resolves relative links against the document's folder.
 - On macOS, includes a **Quick Look extension** for Finder's Space-bar preview and an installer that makes it your default Markdown opener.
@@ -46,14 +46,14 @@ pluginkit -e use -i io.github.markdownview.viewer.quicklook
 
 The installer changes Markdown associations only; it leaves ordinary text files alone. It saves previous Markdown defaults in `~/Library/Application Support/Markdown View/previous-defaults.json` and backs up an existing installation before replacing it.
 
-**Signing:** Release builds are ad hoc signed, not Apple-notarized. A downloaded app or installer may need your explicit approval through Finder's Open command or System Settings → Privacy & Security → Open Anyway. Quick Look also needs macOS to accept and enable its extension. Building locally avoids download quarantine; signing and notarizing public builds requires an Apple Developer certificate.
+**Signing:** `MACOS_SIGNING.txt` on each release states whether that build is Developer ID signed and Apple-notarized. The release workflow signs and notarizes when its Apple secrets are configured; otherwise it produces explicitly labelled ad hoc builds. Those builds may need approval through Finder's Open command or System Settings → Privacy & Security → Open Anyway. Quick Look also needs macOS to accept and enable its extension.
 
 ### Linux
 
 For Debian / Ubuntu, install the downloaded package using `apt`, which also installs its GTK dependencies:
 
 ```sh
-sudo apt install ./markdown-view-0.2.0-linux-amd64.deb
+sudo apt install ./markdown-view-0.3.0-linux-amd64.deb
 ```
 
 The app appears in your desktop's application menu and Markdown files' **Open With** menu. Select it as the default in your file manager if desired.
@@ -61,7 +61,7 @@ The app appears in your desktop's application menu and Markdown files' **Open Wi
 For the tarball:
 
 ```sh
-tar -xzf markdown-view-0.2.0-linux-x86_64.tar.gz
+tar -xzf markdown-view-0.3.0-linux-x86_64.tar.gz
 ./markdown-view/bin/markdown-view README.md
 ```
 
@@ -86,7 +86,7 @@ Press Enter in the search box to find the next match. Search ignores case and wr
 
 The parser supports CommonMark syntax with GitHub-style tables, strikethrough, task lists, and automatic links. The native renderer supports the features listed above; it does not aim to reproduce a browser's HTML layout.
 
-- Tables use tab-separated native columns; HTML-style borders and per-column alignment are not supported.
+- Tables have content-based column widths, independently wrapping cells, Markdown column alignment, shaded headers, padding, and subtle row separators. Wide tables scroll horizontally. macOS uses AppKit text tables; Linux uses GTK cells with a searchable text representation. On Linux, drag to select text inside an individual cell; Select All and Copy include the complete table.
 - Raw HTML is displayed as text. Code uses a monospace font without syntax highlighting.
 - Local images fit within 640 × 480 points/pixels. Remote or missing images appear as linked descriptions, without automatic network requests.
 - Quick Look is sandboxed: macOS may prevent it from loading image files next to a document.
@@ -166,6 +166,22 @@ On macOS:
 
 ## Project structure
 
-`src/render.c` is the shared Markdown-to-text renderer. `src/native.m` supplies AppKit attributed text to both the macOS app and Quick Look extension. `src/linux.c` supplies the GTK interface. `scripts/` contains installation and release packaging; `.github/workflows/build.yml` builds, tests, and publishes downloads.
+`src/render.c` is the shared Markdown-to-text renderer. `src/native.m` supplies AppKit attributed text to both the macOS app and Quick Look extension. `src/linux.c` supplies the GTK interface. `scripts/` contains installation, signing, notarization, and release packaging; `.github/workflows/build.yml` builds, tests, and publishes downloads.
 
 Markdown parsing uses vendored [MD4C 0.5.2](https://github.com/mity/md4c), with its [MIT license](vendor/md4c/LICENSE.md). There are no runtime package downloads or dependency installation steps inside the app.
+
+## Apple signing setup
+
+An existing Developer ID Application certificate and App Store Connect notarization API key can be reused across apps. Configure these repository secrets, matching the names used by Raynard:
+
+| Secret | Value |
+| --- | --- |
+| `CSC_LINK` | Base64-encoded Developer ID certificate and private key (`.p12`) |
+| `CSC_KEY_PASSWORD` | Export password for that `.p12` |
+| `APPLE_API_ISSUER` | App Store Connect API issuer ID |
+| `APPLE_API_KEY_ID` | API key ID |
+| `APPLE_API_KEY_BASE64` | Base64-encoded API private key (`.p8`) |
+
+GitHub repository secrets cannot be read back or automatically inherited from a different repository. Add the original values in repository settings, or use organization secrets with access to both repositories. Tauri updater keys are not used by this app.
+
+On a tagged or manually dispatched build with the secrets configured, CI imports the certificate into a temporary keychain, signs the app and Quick Look extension with the hardened runtime, notarizes and staples the app, packages it, then signs, notarizes, and staples the DMG. The ZIP contains the notarized, stapled app. Failed signing or notarization stops publication.

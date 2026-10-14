@@ -4,12 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct { char text[32768]; size_t length; unsigned seen; unsigned heading; unsigned indent; int links,images; char target[256]; int abort_after,calls; } Result;
+typedef struct { char text[32768]; size_t length; unsigned seen; unsigned heading; unsigned indent; int links,images,table_count,cell_count; unsigned alignment; char target[256]; int abort_after,calls; } Result;
 static int collect(const char *text, size_t length, const MdvStyle *style, void *context) {
     Result *r=context;
     if(r->abort_after && ++r->calls>=r->abort_after) return 1;
     assert(r->length+length<sizeof r->text);
     memcpy(r->text+r->length,text,length); r->length+=length; r->text[r->length]=0;
+    if(style->event==MDV_TABLE_BEGIN) r->table_count++;
+    if(style->event==MDV_CELL_BEGIN) { r->cell_count++; r->alignment|=1u<<style->table_alignment; }
     r->seen|=style->flags; if(style->heading>r->heading) r->heading=style->heading;
     if(style->indent>r->indent) r->indent=style->indent;
     if(style->link) { r->links++; snprintf(r->target,sizeof r->target,"%s",style->link); }
@@ -29,6 +31,7 @@ int main(void) {
     r=parse("> quoted **text**\n\n```c\nint main() {\n  return 0;\n}\n```\n");
     assert(r.seen&MDV_QUOTE); assert(r.seen&MDV_CODE_BLOCK); assert(strstr(r.text,"int main() {\n  return 0;\n}"));
     r=parse("| Left | Right |\n| --- | ---: |\n| one | two |\n");
+    assert(r.table_count==1 && r.cell_count==4 && (r.alignment&(1u<<3)));
     assert(r.seen&MDV_TABLE); assert(strstr(r.text,"Left\tRight\n")); assert(strstr(r.text,"one\ttwo"));
     r=parse("&amp; &lt; &copy; &NotEqualTilde; &#65; &#x1F600; &#0;\n");
     assert(strstr(r.text,"& < © ≂̸ A 😀 �"));

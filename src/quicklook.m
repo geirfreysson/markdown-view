@@ -9,8 +9,8 @@
 @implementation MarkdownPreviewController
 - (void)loadView {
     NSScrollView *scroll=[[NSScrollView alloc] initWithFrame:NSMakeRect(0,0,820,640)];
-    scroll.hasVerticalScroller=YES; scroll.autohidesScrollers=YES;
-    self.text=[[NSTextView alloc] initWithFrame:scroll.bounds];
+    scroll.hasHorizontalScroller=YES; scroll.hasVerticalScroller=YES; scroll.autohidesScrollers=YES;
+    self.text=mdv_text_view(scroll.bounds);
     self.text.editable=NO; self.text.selectable=YES; self.text.richText=YES;
     self.text.verticallyResizable=YES; self.text.horizontallyResizable=NO;
     self.text.autoresizingMask=NSViewWidthSizable;
@@ -28,9 +28,9 @@
             NSData *data=nil;
             if(size.unsignedLongLongValue>128ULL*1024*1024) error=[NSError errorWithDomain:@"MarkdownView" code:3 userInfo:@{NSLocalizedDescriptionKey:@"This file exceeds the 128 MB document limit."}];
             else data=[NSData dataWithContentsOfURL:url options:NSDataReadingMappedIfSafe error:&error];
-            NSAttributedString *rendered=data?mdv_render_data(data,url,16,&error):nil;
+            NSAttributedString *rendered=data?mdv_render_data(data,url,15,&error):nil;
             dispatch_async(dispatch_get_main_queue(),^{
-                if(rendered) { (void)self.view; [self.text.textStorage setAttributedString:rendered]; os_log(OS_LOG_DEFAULT,"Markdown preview ready (%lu characters)",(unsigned long)rendered.length); }
+                if(rendered) { (void)self.view; [self.text.textStorage setAttributedString:rendered]; mdv_update_reading_layout(self.text); os_log(OS_LOG_DEFAULT,"Markdown preview ready (%lu characters)",(unsigned long)rendered.length); }
                 else os_log_error(OS_LOG_DEFAULT,"Markdown preview failed: %{public}@",error.localizedDescription);
                 handler(error);
             });

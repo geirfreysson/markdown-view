@@ -4,8 +4,8 @@ A lightweight, native Markdown viewer for macOS and Linux.
 - **Debian / Ubuntu Linux (x86_64):** Download the `.deb`, then run `sudo apt install ./markdown-view-*-linux-amd64.deb`.
 - **Other Linux distributions (x86_64):** Download the `.tar.gz`. GTK 3 and GLib 2.66+ are required; the binary is built on Ubuntu 22.04 and requires glibc 2.34+.
 
-These community macOS builds are ad hoc signed and are not Apple-notarized. macOS may require an explicit Open / Open Anyway approval for a downloaded app or installer. Quick Look activation depends on macOS accepting and enabling the bundled extension.
+See the signing status appended below and `MACOS_SIGNING.txt` for this release. Ad hoc builds may need explicit Open / Open Anyway approval; Developer ID builds are signed, notarized, and stapled. Quick Look activation depends on macOS accepting and enabling the bundled extension.
 
-Includes headings, emphasis, lists, read-only tasks, quotes, code, basic tables, links, local images, search, and zoom. Raw HTML is displayed as text; remote images are linked descriptions.
+Includes headings, emphasis, lists, read-only tasks, quotes, code, native tables with wrapping cells, links, local images, search, and zoom. Raw HTML is displayed as text; remote images are linked descriptions.
 
 `SHA256SUMS.txt` contains checksums for every download.

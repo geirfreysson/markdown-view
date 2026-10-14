@@ -2,9 +2,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo_dir="$PWD"
-version="${VERSION:-0.2.0}"
+version="${VERSION:-0.3.0}"
 mkdir -p dist
 if [[ "$(uname -s)" == Darwin ]]; then
+    if [[ "${MACOS_SIGNED:-0}" == 1 ]]; then
+        echo 'macOS app and DMG: Developer ID signed, Apple notarized, and stapled.' > dist/MACOS_SIGNING.txt
+    else
+        echo 'macOS app: ad hoc signed; not Apple notarized. Explicit macOS approval may be required.' > dist/MACOS_SIGNING.txt
+    fi
     stage="$(mktemp -d)"
     ditto 'build/Markdown View.app' "$stage/Markdown View.app"
     cp scripts/install-macos.sh "$stage/install.command"

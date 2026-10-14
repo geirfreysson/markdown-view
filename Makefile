@@ -36,9 +36,13 @@ $(BUILD)/macos.stamp: $(BUILD)/mdv-integrate $(BIN) $(BUILD)/markdown-preview pa
 	codesign --force --sign - --entitlements packaging/QuickLook.entitlements "$(APP)/Contents/PlugIns/MarkdownPreview.appex"
 	codesign --force --sign - "$(APP)"
 	touch $@
-test-native: all $(BUILD)/test-quicklook
+$(BUILD)/test-native: tests/test_native.m $(MAC_COMMON) src/native.h src/render.h src/entities.h
+	mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(MAC_FLAGS) tests/test_native.m $(MAC_COMMON) -framework Cocoa -o "$@"
+test-native: all $(BUILD)/test-quicklook $(BUILD)/test-native
 	$(BIN) --smoke-test tests/sample.md
 	$(BUILD)/test-quicklook tests/sample.md
+	$(BUILD)/test-native
 install: all
 	./scripts/install-macos.sh "$(APP)"
 else
@@ -52,6 +56,7 @@ $(BIN): src/linux.c $(COMMON) src/render.h src/entities.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(GTK_CFLAGS) src/linux.c $(COMMON) $(GTK_LIBS) -o $@
 test-native: all
 	xvfb-run -a $(BIN) --smoke-test tests/sample.md
+	xvfb-run -a $(BIN) --smoke-test tests/tables.md
 install: all
 	install -Dm755 $(BIN) "$(DESTDIR)$(PREFIX)/bin/markdown-view"
 	install -Dm644 packaging/markdown-view.desktop "$(DESTDIR)$(PREFIX)/share/applications/markdown-view.desktop"

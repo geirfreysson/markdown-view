@@ -2,21 +2,21 @@
 
 A small, native app for reading Markdown on **macOS** and **Linux**.
 
-## Just open and read
+## A quiet place to read
 
-Beautiful headings, **bold**, *italic*, `inline code`, and [clickable links](https://github.com/geirfreysson/markdown-view). Select text, copy a passage, or search for what you need.
+Headings, **bold**, *italic*, `inline code`, and [clickable links](https://github.com/geirfreysson/markdown-view). Find what you need, select a passage, and copy it.
 
-> No editor. No browser engine. No background polling.
+> Native widgets, a comfortable reading width, and no background polling.
 
-## A familiar desktop app
+## Tables that stay readable
 
-- Open Markdown files directly from your file manager.
-- Search your document and adjust the text size.
-- Preview Markdown in Finder with the **Space bar**.
+| Feature | Detail | Status |
+| :--- | :--- | :---: |
+| Native table cells | Long values wrap inside their own column, keeping every row aligned and easy to follow. | Ready |
+| Finder integration | Press Space to preview a Markdown file. Double-click to open it. | Ready |
+| Lightweight rendering | AppKit on macOS, GTK on Linux. | Ready |
 
 ```sh
 make
 open "build/Markdown View.app"
 ```
-
-Built with AppKit, GTK, and a compact C Markdown parser.
