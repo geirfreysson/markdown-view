@@ -21,8 +21,11 @@ jobs:
       - name: Verify bundled signatures and architectures
         run: |
           codesign --verify --deep --strict 'build/Markdown View.app'
-          lipo 'build/Markdown View.app/Contents/MacOS/markdown-view' -verify_arch arm64 x86_64
-          lipo 'build/Markdown View.app/Contents/PlugIns/MarkdownPreview.appex/Contents/MacOS/markdown-preview' -verify_arch arm64 x86_64
+          for binary_path in 'build/Markdown View.app/Contents/MacOS/markdown-view' 'build/Markdown View.app/Contents/MacOS/mdv-integrate' 'build/Markdown View.app/Contents/PlugIns/MarkdownPreview.appex/Contents/MacOS/markdown-preview'; do
+            binary_archs="$(lipo -archs "$binary_path")"
+            [[ " $binary_archs " == *" arm64 "* ]]
+            [[ " $binary_archs " == *" x86_64 "* ]]
+          done
       - name: Check renderer memory safety
         run: |
           cc -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc -Ivendor/md4c tests/test_render.c src/render.c vendor/md4c/md4c.c -o build/test-sanitize
