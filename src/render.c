@@ -92,7 +92,8 @@ static int enter_span(MD_SPANTYPE type, void *detail, void *ctx) {
     case MD_SPAN_DEL: r->style.flags|=MDV_STRIKE; break;
     case MD_SPAN_A:
         r->style.link=r->owned_links[r->span_depth-1]=attribute(((MD_SPAN_A_DETAIL*)detail)->href);
-        if(!r->style.link) return -1; break;
+        if(!r->style.link) return -1;
+        break;
     case MD_SPAN_IMG:
         if(!r->image_depth) { r->image=attribute(((MD_SPAN_IMG_DETAIL*)detail)->src); if(!r->image) return -1; }
         r->image_depth++; break;

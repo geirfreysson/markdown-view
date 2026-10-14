@@ -411,10 +411,13 @@ int main(int argc, char **argv) {
         }
         if(v->tables->len) {
             Table *table=g_ptr_array_index(v->tables,0); TableCell *cell=g_ptr_array_index(table->cells,table->cells->len-1);
+            gtk_text_buffer_get_iter_at_offset(v->buffer,&start,cell->offset); gtk_text_buffer_place_cursor(v->buffer,&start);
             gtk_entry_set_text(GTK_ENTRY(v->search),cell->text->str); find(v,FALSE);
             if(!gtk_text_buffer_get_selection_bounds(v->buffer,&start,&end)) return 4;
             char *selected=gtk_text_buffer_get_text(v->buffer,&start,&end,TRUE);
-            gboolean matched=!strcmp(selected,cell->text->str); g_free(selected);
+            gboolean matched=!strcmp(selected,cell->text->str);
+            if(!matched) g_printerr("Table search mismatch: wanted '%s', got '%s'\n",cell->text->str,selected);
+            g_free(selected);
             if(!matched) return 5;
             GtkTextIter begin,finish; gtk_text_buffer_get_bounds(v->buffer,&begin,&finish);
             char *document=gtk_text_buffer_get_text(v->buffer,&begin,&finish,TRUE);
