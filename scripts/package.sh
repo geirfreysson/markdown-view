@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo_dir="$PWD"
-version="${VERSION:-0.3.0}"
+version="${VERSION:-0.3.1}"
 mkdir -p dist
 if [[ "$(uname -s)" == Darwin ]]; then
     if [[ "${MACOS_SIGNED:-0}" == 1 ]]; then

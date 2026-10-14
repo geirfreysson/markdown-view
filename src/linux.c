@@ -89,6 +89,7 @@ static void build_table(Viewer *v, Table *table) {
         gtk_grid_attach(GTK_GRID(grid),box,(gint)cell->column,(gint)cell->row,1,1);
     }
     table->scroll=gtk_scrolled_window_new(NULL,NULL); g_object_ref_sink(table->scroll);
+    gtk_widget_set_margin_top(table->scroll,16); gtk_widget_set_margin_bottom(table->scroll,16);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(table->scroll),GTK_POLICY_AUTOMATIC,GTK_POLICY_NEVER);
     gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(table->scroll),TRUE);
     gtk_container_add(GTK_CONTAINER(table->scroll),grid); g_free(weights);
@@ -152,7 +153,7 @@ static int native_sink(const char *text, size_t length, const MdvStyle *style, v
     char key[96]; g_snprintf(key,sizeof key,"%u:%u:%u",style->flags,style->heading,style->indent);
     GtkTextTag *tag=g_hash_table_lookup(v->tags,key);
     if(!tag) {
-        tag=gtk_text_buffer_create_tag(v->buffer,NULL,"left-margin",(gint)(style->indent*22),"pixels-inside-wrap",5,"pixels-below-lines",style->indent?5:10,NULL);
+        tag=gtk_text_buffer_create_tag(v->buffer,NULL,"left-margin",(gint)(style->indent*22),"pixels-inside-wrap",5,"pixels-below-lines",style->indent?6:10,NULL);
         double factors[]={1,1.75,1.4,1.2,1.1,1.0,1.0};
         double size=v->font_size*(style->heading?factors[MIN(style->heading,6)]:1);
         if(style->flags&MDV_CODE) g_object_set(tag,"family","monospace","size-points",size*0.9,NULL);

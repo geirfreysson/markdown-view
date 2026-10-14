@@ -37,7 +37,7 @@ static NSDictionary *attributes(NativeRender *r, const MdvStyle *style) {
     if(style->flags&MDV_ITALIC) font=[NSFont fontWithDescriptor:[font.fontDescriptor fontDescriptorWithSymbolicTraits:font.fontDescriptor.symbolicTraits|NSFontItalicTrait] size:font.pointSize]?:font;
     NSMutableParagraphStyle *p=[NSMutableParagraphStyle new];
     p.lineSpacing=mono?3:5;
-    p.paragraphSpacing=style->indent?5:10;
+    p.paragraphSpacing=style->indent?6:10;
     p.headIndent=style->indent*20; p.firstLineHeadIndent=p.headIndent;
     p.tailIndent=760; p.tabStops=@[];
     if(style->heading) { p.paragraphSpacingBefore=style->heading==1?0:16; p.paragraphSpacing=8; }
@@ -67,8 +67,10 @@ static void finishTable(NativeRender *r) {
     CGFloat sum=0,minimum=0;
     for(NSNumber *width in widths) { sum+=width.doubleValue; minimum+=MIN(width.doubleValue,120); }
     NSTextTable *table=[NSTextTable new]; table.numberOfColumns=r.columns;
-    table.layoutAlgorithm=NSTextTableFixedLayoutAlgorithm; table.collapsesBorders=YES; table.hidesEmptyCells=NO;
+    table.layoutAlgorithm=NSTextTableAutomaticLayoutAlgorithm; table.collapsesBorders=YES; table.hidesEmptyCells=NO;
     [table setContentWidth:100 type:NSTextBlockPercentageValueType];
+    [table setWidth:16 type:NSTextBlockAbsoluteValueType forLayer:NSTextBlockMargin edge:NSMinYEdge];
+    [table setWidth:8 type:NSTextBlockAbsoluteValueType forLayer:NSTextBlockMargin edge:NSMaxYEdge];
     [table setValue:minimum type:NSTextBlockAbsoluteValueType forDimension:NSTextBlockMinimumWidth];
     for(MdvCell *cell in r.cells) {
         NSTextTableBlock *block=[[NSTextTableBlock alloc] initWithTable:table startingRow:cell.row rowSpan:1 startingColumn:cell.column columnSpan:1];

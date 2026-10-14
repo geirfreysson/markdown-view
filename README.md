@@ -7,7 +7,7 @@
 
 Markdown View is a small, read-only desktop app for **macOS and Linux**. It uses native text widgets—AppKit on macOS, GTK on Linux—and a compact C parser. There is no browser engine, JavaScript runtime, editor, or background file polling.
 
-![Markdown View rendering a document with headings, emphasis, links, lists, and code on macOS](docs/screenshot.png)
+![Markdown View rendering a document with headings, emphasis, links, wrapping tables, and code on macOS](docs/screenshot.png)
 
 *The native macOS document view. Screenshot exported from the app using [this Markdown file](docs/showcase.md).*
 
@@ -53,7 +53,7 @@ The installer changes Markdown associations only; it leaves ordinary text files 
 For Debian / Ubuntu, install the downloaded package using `apt`, which also installs its GTK dependencies:
 
 ```sh
-sudo apt install ./markdown-view-0.3.0-linux-amd64.deb
+sudo apt install ./markdown-view-0.3.1-linux-amd64.deb
 ```
 
 The app appears in your desktop's application menu and Markdown files' **Open With** menu. Select it as the default in your file manager if desired.
@@ -61,7 +61,7 @@ The app appears in your desktop's application menu and Markdown files' **Open Wi
 For the tarball:
 
 ```sh
-tar -xzf markdown-view-0.3.0-linux-x86_64.tar.gz
+tar -xzf markdown-view-0.3.1-linux-x86_64.tar.gz
 ./markdown-view/bin/markdown-view README.md
 ```
 
