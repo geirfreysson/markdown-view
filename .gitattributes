@@ -1,0 +1,3 @@
+# Markdown hard breaks deliberately use trailing spaces; keep vendored source intact.
+*.md whitespace=-blank-at-eol
+vendor/** whitespace=-blank-at-eol

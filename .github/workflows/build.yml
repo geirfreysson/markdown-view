@@ -1,0 +1,76 @@
+name: Build and release
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  macos:
+    name: macOS universal
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Intel and Apple Silicon app with Quick Look extension
+        run: make all test test-native ARCH_FLAGS="-arch arm64 -arch x86_64"
+      - name: Verify bundled signatures and architectures
+        run: |
+          codesign --verify --deep --strict 'build/Markdown View.app'
+          lipo -verify_arch arm64 x86_64 'build/Markdown View.app/Contents/MacOS/markdown-view'
+          lipo -verify_arch arm64 x86_64 'build/Markdown View.app/Contents/PlugIns/MarkdownPreview.appex/Contents/MacOS/markdown-preview'
+      - name: Check renderer memory safety
+        run: |
+          cc -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc -Ivendor/md4c tests/test_render.c src/render.c vendor/md4c/md4c.c -o build/test-sanitize
+          ./build/test-sanitize
+      - name: Package DMG and ZIP
+        run: ./scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: markdown-view-macos
+          path: dist/markdown-view-*
+          if-no-files-found: error
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev xvfb dpkg-dev
+      - run: make all test test-native
+      - name: Check renderer memory safety
+        run: |
+          cc -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc -Ivendor/md4c tests/test_render.c src/render.c vendor/md4c/md4c.c -o build/test-sanitize
+          ./build/test-sanitize
+      - name: Package DEB and tarball
+        run: ./scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: markdown-view-linux
+          path: dist/markdown-view-*
+          if-no-files-found: error
+  release:
+    name: Publish downloads
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: markdown-view-*
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub release with checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          (cd dist && sha256sum markdown-view-* > SHA256SUMS.txt)
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --title "Markdown View $RELEASE_TAG" --notes-file docs/release-notes.md

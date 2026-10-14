@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Markdown View
+Comment=A lightweight, native Markdown viewer
+Exec=markdown-view %F
+Icon=text-x-generic
+Terminal=false
+Categories=Office;Viewer;
+MimeType=text/markdown;text/x-markdown;text/plain;
+StartupNotify=true
