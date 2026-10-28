@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Intel and Apple Silicon app with Quick Look extension
-        run: make all test test-native ARCH_FLAGS="-arch arm64 -arch x86_64"
+        run: make all test test-native test-terminal ARCH_FLAGS="-arch arm64 -arch x86_64"
       - name: Verify bundled signatures and architectures
         run: |
           codesign --verify --deep --strict 'build/Markdown View.app'

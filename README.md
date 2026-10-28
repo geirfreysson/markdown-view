@@ -17,8 +17,9 @@ Markdown View is a small, read-only desktop app for **macOS and Linux**. It uses
 - Lets you select and copy text, search within a document, and adjust the text size.
 - Switches between rendered content and read-only, monospace Markdown source using **Show Markdown** / **Show Rendered** in the toolbar.
 - Opens multiple files in separate windows and resolves relative links against the document's folder.
+- On macOS, **Edit** opens an embedded terminal below the document and launches Claude Code or Codex in its folder, with the displayed file as the default context unless disabled in Settings. Saves refresh the preview automatically while the session exists. [Editing terminal details](docs/embedded-terminal.md).
 - On macOS, includes a **Quick Look extension** for Finder's Space-bar preview and an installer that makes it your default Markdown opener.
-- Does no recurring work while idle. Reload a changed file when you need to.
+- Reading alone does no recurring work while idle. Reload changed files manually, or use automatic refresh during an editing session.
 
 ## Download and install
 
@@ -26,7 +27,7 @@ Get the files from the [latest release](https://github.com/geirfreysson/markdown
 
 | Platform | Download | Requirements |
 | --- | --- | --- |
-| macOS | `.dmg` with installer, or `.zip` with the app | macOS 12+, Apple Silicon or Intel |
+| macOS | `.dmg` with installer, or `.zip` with the app | macOS 13+, Apple Silicon or Intel |
 | Debian / Ubuntu | `.deb` | x86_64; Ubuntu 22.04+ or compatible |
 | Other Linux distributions | `.tar.gz` | x86_64; GTK 3.24+, GLib 2.66+, glibc 2.34+ |
 
@@ -97,7 +98,7 @@ The parser supports CommonMark syntax with GitHub-style tables, strikethrough, t
 
 ## Performance
 
-The viewer uses one process, cached formatting attributes, and the OS's text layout system. It keeps the source and rendered document available for instant view switching and has no background timers. Quick Look runs in a separate, on-demand macOS extension process.
+The Markdown viewer uses cached formatting attributes and the OS's text layout system. Editing launches an additional agent process in a native Ghostty terminal. It keeps the source and rendered document available for instant view switching. File watching starts only during editing sessions. Quick Look runs in a separate, on-demand macOS extension process.
 
 On the development machine (Apple Silicon, macOS 26.6.2), three consecutive launches of the [sample document](tests/sample.md) measured:
 
@@ -108,7 +109,7 @@ On the development machine (Apple Silicon, macOS 26.6.2), three consecutive laun
 | Idle CPU in `ps` samples | 0.0% |
 | Original arm64 viewer executable | 217 KiB |
 
-These were **warm launches**, measured before adding the Quick Look bundle. They exclude OS process/loader work before `main()` and are not a cold-start guarantee. The universal download includes two architectures and the extension. RSS was about 121 MiB, including resident shared frameworks and fonts; it is a different metric from physical memory footprint. Document length, formatting, and images affect resource use.
+These were **warm launches**, measured before adding the Quick Look bundle. They exclude OS process/loader work before `main()` and are not a cold-start guarantee. Those historical measurements predate the editing terminal. Current footprint measurements are in [embedded terminal details](docs/embedded-terminal.md). The universal download includes two architectures and the extension. RSS was about 121 MiB, including resident shared frameworks and fonts; it is a different metric from physical memory footprint. Document length, formatting, and images affect resource use.
 
 macOS loads and renders files off the main thread. Linux renders on the main thread, so unusually large documents can pause its interface while loading. Linux performance has not been benchmarked.
 
@@ -116,7 +117,7 @@ macOS loads and renders files off the main thread. Linux renders on the main thr
 
 ### macOS
 
-Requires Apple's command-line tools (`xcode-select --install`), but not the full Xcode app:
+Requires Apple's command-line tools (`xcode-select --install`), Python 3, and network access for the first build. The build script fetches pinned Ghostty and Zig dependencies into `build/deps/`; full Xcode is unnecessary:
 
 ```sh
 git clone https://github.com/geirfreysson/markdown-view.git
@@ -153,6 +154,7 @@ On Fedora, the build dependencies are `gcc make pkgconf-pkg-config gtk3-devel`. 
 ```sh
 make test                 # Shared renderer
 make test-native          # Native UI; also Quick Look controller on macOS
+make test-terminal        # macOS embedded terminal and live preview integration
 ```
 
 Linux's native test uses `xvfb-run`. CI runs both platforms' tests, checks the renderer with AddressSanitizer and UndefinedBehaviorSanitizer, verifies macOS signatures and universal architectures, and packages downloads. Pushing a `v*` tag publishes a release only after both platform jobs succeed.
@@ -169,7 +171,7 @@ On macOS:
 
 `src/render.c` is the shared Markdown-to-text renderer. `src/native.m` supplies AppKit attributed text to both the macOS app and Quick Look extension. `src/linux.c` supplies the GTK interface. `scripts/` contains installation, signing, notarization, and release packaging; `.github/workflows/build.yml` builds, tests, and publishes downloads.
 
-Markdown parsing uses vendored [MD4C 0.5.2](https://github.com/mity/md4c), with its [MIT license](vendor/md4c/LICENSE.md). There are no runtime package downloads or dependency installation steps inside the app.
+Markdown parsing uses vendored [MD4C 0.5.2](https://github.com/mity/md4c), with its [MIT license](vendor/md4c/LICENSE.md). The macOS terminal statically links pinned Ghostty. There are no runtime package downloads or dependency installation steps inside the app; editing agents are installed separately.
 
 ## Apple signing setup
 

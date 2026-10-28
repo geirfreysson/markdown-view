@@ -1,0 +1,68 @@
+diff --git a/build.zig b/build.zig
+index 85a91fb1d..2c7e026a3 100644
+--- a/build.zig
++++ b/build.zig
+@@ -225,7 +225,12 @@ pub fn build(b: *std.Build) !void {
+ 
+         // We shouldn't have this guard but we don't currently
+         // build on macOS this way ironically so we need to fix that.
+-        if (!config.target.result.os.tag.isDarwin()) {
++        if (config.target.result.os.tag.isDarwin()) {
++            // Standalone static embedder build; no Xcode app or XCFramework tool.
++            lib_static.installHeader();
++            lib_static.install("libghostty-internal.a");
++            resources.install();
++        } else {
+             lib_shared.installHeader(); // Only need one header
+             if (config.target.result.os.tag == .windows) {
+                 lib_shared.install("ghostty-internal.dll");
+diff --git a/src/build/SharedDeps.zig b/src/build/SharedDeps.zig
+index 8f4e23954..3dcbf9fc4 100644
+--- a/src/build/SharedDeps.zig
++++ b/src/build/SharedDeps.zig
+@@ -500,10 +500,10 @@ pub fn add(
+     if (step.rootModuleTarget().os.tag.isDarwin()) {
+         try @import("apple_sdk").addPaths(b, step);
+ 
+-        const metallib = self.metallib.?;
+-        metallib.output.addStepDependencies(&step.step);
+-        step.root_module.addAnonymousImport("ghostty_metallib", .{
+-            .root_source_file = metallib.output,
++        // Markdown View compiles Metal source on first terminal use. This
++        // permits command-line-tools-only builds without the Metal toolchain.
++        step.root_module.addAnonymousImport("ghostty_metal_source", .{
++            .root_source_file = b.path("src/renderer/shaders/shaders.metal"),
+         });
+     }
+ 
+diff --git a/src/renderer/metal/shaders.zig b/src/renderer/metal/shaders.zig
+index b14068f96..095e17d0b 100644
+--- a/src/renderer/metal/shaders.zig
++++ b/src/renderer/metal/shaders.zig
+@@ -336,21 +336,15 @@ pub const BgImage = extern struct {
+ fn initLibrary(device: objc.Object) !objc.Object {
+     const start: std.Io.Timestamp = .now(global.io(), .awake);
+ 
+-    const data = try macos.dispatch.Data.create(
+-        @embedFile("ghostty_metallib"),
+-        macos.dispatch.queue.getMain(),
+-        macos.dispatch.Data.DESTRUCTOR_DEFAULT,
++    const source = try macos.foundation.String.createWithBytes(
++        @embedFile("ghostty_metal_source"), .utf8, false,
+     );
+-    defer data.release();
+-
++    defer source.release();
+     var err: ?*anyopaque = null;
+     const library = device.msgSend(
+         objc.Object,
+-        objc.sel("newLibraryWithData:error:"),
+-        .{
+-            data,
+-            &err,
+-        },
++        objc.sel("newLibraryWithSource:options:error:"),
++        .{ source, @as(?*anyopaque, null), &err },
+     );
+     try checkError(err);
+ 
