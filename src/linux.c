@@ -16,8 +16,9 @@ typedef struct {
 #define MAX_FILE_SIZE (128ULL*1024*1024)
 typedef struct {
     GtkApplication *app;
-    GtkWidget *window, *view, *search;
-    GtkTextBuffer *buffer;
+    GtkWidget *window, *view, *search, *view_button;
+    GtkTextBuffer *buffer, *rendered_buffer, *source_buffer;
+    gboolean shows_source;
     GHashTable *tags;
     char *path, *base;
     int font_size;
@@ -181,6 +182,27 @@ static int native_sink(const char *text, size_t length, const MdvStyle *style, v
     }
     return 0;
 }
+static void display_document(Viewer *v) {
+    /* Detach table widgets before changing buffers; their owning tables retain them. */
+    for(guint i=0;i<v->tables->len;i++) {
+        Table *table=g_ptr_array_index(v->tables,i);
+        if(gtk_widget_get_parent(table->scroll)==v->view) gtk_container_remove(GTK_CONTAINER(v->view),table->scroll);
+    }
+    v->buffer=v->shows_source?v->source_buffer:v->rendered_buffer;
+    gtk_text_view_set_buffer(GTK_TEXT_VIEW(v->view),v->buffer);
+    if(!v->shows_source) for(guint i=0;i<v->tables->len;i++) {
+        Table *table=g_ptr_array_index(v->tables,i);
+        gtk_text_view_add_child_at_anchor(GTK_TEXT_VIEW(v->view),table->scroll,table->anchor);
+        gtk_widget_show_all(table->scroll);
+    }
+    gtk_button_set_label(GTK_BUTTON(v->view_button),v->shows_source?"Show Rendered":"Show Markdown");
+}
+static void toggle_source(GtkWidget *widget, gpointer context) {
+    (void)widget; Viewer *v=context; if(!v->path) return;
+    v->shows_source=!v->shows_source; display_document(v);
+    GtkTextIter start; gtk_text_buffer_get_start_iter(v->buffer,&start);
+    gtk_text_buffer_place_cursor(v->buffer,&start); gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(v->view),&start,0,FALSE,0,0);
+}
 static void load_file(Viewer *v, const char *path) {
     GStatBuf statbuf;
     if(g_stat(path,&statbuf)!=0) { error_dialog(v,"The file could not be read."); return; }
@@ -196,21 +218,26 @@ static void load_file(Viewer *v, const char *path) {
     v->base=g_filename_to_uri(path,NULL,NULL);
     const char *text=source; gsize size=length;
     if(size>=3 && !memcmp(text,"\xef\xbb\xbf",3)) { text+=3; size-=3; }
-    int result=mdv_render(text,size,native_sink,v); g_free(source);
+    int result=mdv_render(text,size,native_sink,v);
+    GtkTextBuffer *source_buffer=gtk_text_buffer_new(NULL);
+    gtk_text_buffer_set_text(source_buffer,text,(gint)size); g_free(source);
+    GtkTextTag *plain=gtk_text_buffer_create_tag(source_buffer,NULL,"family","monospace","size-points",(double)v->font_size,NULL);
+    GtkTextIter begin,end; gtk_text_buffer_get_bounds(source_buffer,&begin,&end);
+    gtk_text_buffer_apply_tag(source_buffer,plain,&begin,&end);
     if(result) {
         g_ptr_array_free(v->tables,TRUE); v->tables=old_tables; v->table=NULL;
         g_object_unref(v->buffer); g_hash_table_destroy(v->tags); g_free(v->base);
         v->buffer=old_buffer; v->tags=old_tags; v->base=old_base;
+        g_object_unref(source_buffer);
         error_dialog(v,"Could not render this document (excessive nesting)."); return;
     }
     g_ptr_array_free(old_tables,TRUE);
-    gtk_text_view_set_buffer(GTK_TEXT_VIEW(v->view),v->buffer);
-    for(guint i=0;i<v->tables->len;i++) {
-        Table *table=g_ptr_array_index(v->tables,i);
-        gtk_text_view_add_child_at_anchor(GTK_TEXT_VIEW(v->view),table->scroll,table->anchor);
-        gtk_widget_show_all(table->scroll);
-    }
-    g_object_unref(old_buffer); g_hash_table_destroy(old_tags); g_free(old_base);
+    g_object_unref(v->rendered_buffer);
+    v->rendered_buffer=v->buffer;
+    if(v->source_buffer) g_object_unref(v->source_buffer);
+    v->source_buffer=source_buffer;
+    display_document(v); gtk_widget_set_sensitive(v->view_button,TRUE);
+    g_hash_table_destroy(old_tags); g_free(old_base);
     char *new_path=g_strdup(path); g_free(v->path); v->path=new_path;
     char *basename=g_path_get_basename(path), *title=g_strconcat(basename," — Markdown View",NULL);
     gtk_window_set_title(GTK_WINDOW(v->window),title); g_free(title); g_free(basename);
@@ -230,7 +257,7 @@ static void find(Viewer *v, gboolean backward) {
         if(backward) gtk_text_buffer_get_end_iter(v->buffer,&from); else gtk_text_buffer_get_start_iter(v->buffer,&from);
         found=backward?gtk_text_iter_backward_search(&from,query,flags,&start,&end,NULL):gtk_text_iter_forward_search(&from,query,flags,&start,&end,NULL);
     }
-    for(guint i=0;i<v->tables->len;i++) {
+    for(guint i=0;!v->shows_source && i<v->tables->len;i++) {
         Table *table=g_ptr_array_index(v->tables,i);
         for(guint j=0;j<table->cells->len;j++) {
             TableCell *cell=g_ptr_array_index(table->cells,j);
@@ -303,7 +330,7 @@ static void link_clicked(GtkWidget *widget, GdkEvent *event, gpointer context) {
     g_slist_free(tags);
 }
 static void destroy_viewer(gpointer context) {
-    Viewer *v=context; g_ptr_array_free(v->tables,TRUE); g_object_unref(v->buffer); g_hash_table_destroy(v->tags); g_free(v->path); g_free(v->base); g_free(v);
+    Viewer *v=context; g_ptr_array_free(v->tables,TRUE); g_object_unref(v->rendered_buffer); if(v->source_buffer) g_object_unref(v->source_buffer); g_hash_table_destroy(v->tags); g_free(v->path); g_free(v->base); g_free(v);
 }
 static gboolean draw_quotes(GtkWidget *widget, cairo_t *cr, gpointer context) {
     (void)context; GtkTextView *view=GTK_TEXT_VIEW(widget); GdkRectangle visible;
@@ -352,13 +379,15 @@ static Viewer *new_viewer(GtkApplication *app) {
     gtk_container_add(GTK_CONTAINER(v->window),box); gtk_container_set_border_width(GTK_CONTAINER(bar),12);
     const char *labels[]={"Open…","Reload","A−","A+"}; GCallback actions[]={G_CALLBACK(open_file),G_CALLBACK(reload),G_CALLBACK(zoom_out),G_CALLBACK(zoom_in)};
     for(int i=0;i<4;i++) { GtkWidget *button=gtk_button_new_with_label(labels[i]); g_signal_connect(button,"clicked",actions[i],v); gtk_box_pack_start(GTK_BOX(bar),button,FALSE,FALSE,0); }
+    v->view_button=gtk_button_new_with_label("Show Markdown"); gtk_widget_set_sensitive(v->view_button,FALSE);
+    g_signal_connect(v->view_button,"clicked",G_CALLBACK(toggle_source),v); gtk_box_pack_start(GTK_BOX(bar),v->view_button,FALSE,FALSE,0);
     v->search=gtk_search_entry_new(); gtk_entry_set_placeholder_text(GTK_ENTRY(v->search),"Find in document"); g_signal_connect(v->search,"activate",G_CALLBACK(find_next),v); gtk_box_pack_end(GTK_BOX(bar),v->search,TRUE,TRUE,0);
     gtk_box_pack_start(GTK_BOX(box),bar,FALSE,FALSE,0);
     GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL); gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
     v->view=gtk_text_view_new(); gtk_text_view_set_editable(GTK_TEXT_VIEW(v->view),FALSE); gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(v->view),FALSE); gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(v->view),GTK_WRAP_WORD_CHAR);
     gtk_text_view_set_left_margin(GTK_TEXT_VIEW(v->view),36); gtk_text_view_set_right_margin(GTK_TEXT_VIEW(v->view),36); gtk_text_view_set_top_margin(GTK_TEXT_VIEW(v->view),28); gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(v->view),28);
     v->tables=g_ptr_array_new_with_free_func(table_free);
-    v->buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(v->view)); g_object_ref(v->buffer); v->tags=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
+    v->buffer=gtk_text_view_get_buffer(GTK_TEXT_VIEW(v->view)); g_object_ref(v->buffer); v->rendered_buffer=v->buffer; v->tags=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
     gtk_text_buffer_set_text(v->buffer,"Markdown View\n\nOpen a Markdown file to start reading.\n\nCtrl+O  Open     Ctrl+F  Find     Ctrl+Plus / Ctrl+Minus  Zoom     Ctrl+R  Reload",-1);
     gtk_container_add(GTK_CONTAINER(scroll),v->view); gtk_box_pack_start(GTK_BOX(box),scroll,TRUE,TRUE,0);
     g_signal_connect(v->window,"key-press-event",G_CALLBACK(key_press),v); g_signal_connect(v->view,"event-after",G_CALLBACK(link_clicked),v);
@@ -426,7 +455,29 @@ int main(int argc, char **argv) {
             g_free(document);
             g_print("Native table checks passed: %u cells, selectable text, inline markup, table search and complete document text.\n",total_cells);
         }
-        g_print("Native window, read-only text buffer, layout, and search smoke test passed.\n");
+        for(int i=0;i<3;i++) {
+            gtk_button_clicked(GTK_BUTTON(v->view_button));
+            char *source=NULL; gsize length=0;
+            if(!g_file_get_contents(v->path,&source,&length,NULL)) return 7;
+            const char *expected=source;
+            if(length>=3 && !memcmp(source,"\xef\xbb\xbf",3)) expected+=3;
+            gtk_text_buffer_get_bounds(v->buffer,&start,&end);
+            char *actual=gtk_text_buffer_get_text(v->buffer,&start,&end,TRUE);
+            gboolean matched=v->shows_source && !strcmp(actual,expected);
+            g_free(source); g_free(actual);
+            if(!matched || gtk_text_view_get_editable(GTK_TEXT_VIEW(v->view))) return 8;
+            gtk_entry_set_text(GTK_ENTRY(v->search),"Markdown"); find(v,FALSE);
+            if(!gtk_text_buffer_get_selection_bounds(v->buffer,&start,&end)) return 9;
+            reload(NULL,v);
+            if(!v->shows_source || v->buffer!=v->source_buffer) return 10;
+            gtk_button_clicked(GTK_BUTTON(v->view_button));
+            if(v->shows_source || v->buffer!=v->rendered_buffer) return 11;
+            for(guint j=0;j<v->tables->len;j++) {
+                Table *table=g_ptr_array_index(v->tables,j);
+                if(gtk_widget_get_parent(table->scroll)!=v->view) return 12;
+            }
+        }
+        g_print("Native window, source toggle, read-only buffers, layout, and search smoke test passed.\n");
         gtk_widget_destroy(v->window); g_object_unref(test_app); return 0;
     }
     GtkApplication *app=gtk_application_new("io.github.markdownview.viewer",G_APPLICATION_HANDLES_OPEN);

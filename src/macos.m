@@ -19,6 +19,12 @@ static double physicalMemoryMiB(void) {
 @property CGFloat fontSize;
 @property NSUInteger generation;
 @property BOOL hasDocument;
+@property BOOL showsSource;
+@property NSButton *viewButton;
+@property NSString *source;
+@property NSAttributedString *rendered;
+- (void)displayDocument;
+- (void)toggleSource:(id)sender;
 - (void)loadURL:(NSURL *)url;
 - (void)open:(id)sender;
 - (void)reload:(id)sender;
@@ -45,6 +51,8 @@ static double physicalMemoryMiB(void) {
         NSArray *labels=@[@"Open…",@"Reload",@"A−",@"A+"];
         NSArray *actions=@[NSStringFromSelector(@selector(open:)),NSStringFromSelector(@selector(reload:)),NSStringFromSelector(@selector(zoomOut:)),NSStringFromSelector(@selector(zoomIn:))];
         for(NSUInteger i=0;i<labels.count;i++) { NSButton *b=[NSButton buttonWithTitle:labels[i] target:self action:NSSelectorFromString(actions[i])]; [bar addArrangedSubview:b]; }
+        _viewButton=[NSButton buttonWithTitle:@"Show Markdown" target:self action:@selector(toggleSource:)];
+        _viewButton.enabled=NO; [bar addArrangedSubview:_viewButton];
         _search=[NSSearchField new]; _search.placeholderString=@"Find in document"; _search.target=self; _search.action=@selector(findNext:);
         _search.sendsWholeSearchString=YES; _search.sendsSearchStringImmediately=NO; [bar addArrangedSubview:_search];
         [_search.widthAnchor constraintGreaterThanOrEqualToConstant:160].active=YES;
@@ -81,6 +89,8 @@ static double physicalMemoryMiB(void) {
             if(fileSize.unsignedLongLongValue>128ULL*1024*1024) error=[NSError errorWithDomain:@"MarkdownView" code:3 userInfo:@{NSLocalizedDescriptionKey:@"This file exceeds the 128 MB document limit."}];
             else data=[NSData dataWithContentsOfURL:url options:NSDataReadingMappedIfSafe error:&error];
             NSAttributedString *rendered=data?mdv_render_data(data,url,size,&error):nil;
+            NSString *source=rendered?[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]:nil;
+            if([source hasPrefix:@"\uFEFF"]) source=[source substringFromIndex:1];
             dispatch_async(dispatch_get_main_queue(),^{
                 if(generation!=self.generation) return;
                 if(!rendered) {
@@ -88,11 +98,9 @@ static double physicalMemoryMiB(void) {
                     NSAlert *alert=[NSAlert new]; alert.messageText=@"Unable to open Markdown file"; alert.informativeText=error.localizedDescription?:@"The file could not be read.";
                     [alert beginSheetModalForWindow:self.window completionHandler:nil]; return;
                 }
-                NSRange selection=self.text.selectedRange;
-                [self.text.textStorage setAttributedString:rendered];
-                mdv_update_reading_layout(self.text);
-                self.hasDocument=YES;
-                if(NSMaxRange(selection)<=self.text.string.length) self.text.selectedRange=selection;
+                self.source=source; self.rendered=rendered;
+                self.hasDocument=YES; self.viewButton.enabled=YES;
+                [self displayDocument];
                 if(profileLaunch) {
                     [self.text.layoutManager ensureLayoutForTextContainer:self.text.textContainer];
                     [self.window displayIfNeeded];
@@ -102,6 +110,22 @@ static double physicalMemoryMiB(void) {
             });
         }
     });
+}
+- (void)displayDocument {
+    NSRange selection=self.text.selectedRange;
+    NSAttributedString *content=self.rendered;
+    if(self.showsSource) content=[[NSAttributedString alloc] initWithString:self.source attributes:@{
+        NSFontAttributeName:[NSFont monospacedSystemFontOfSize:self.fontSize weight:NSFontWeightRegular],
+        NSForegroundColorAttributeName:NSColor.labelColor}];
+    [self.text.textStorage setAttributedString:content];
+    mdv_update_reading_layout(self.text);
+    if(NSMaxRange(selection)<=self.text.string.length) self.text.selectedRange=selection;
+    self.viewButton.title=self.showsSource?@"Show Rendered":@"Show Markdown";
+}
+- (void)toggleSource:(id)sender {
+    (void)sender; if(!self.hasDocument) return;
+    self.showsSource=!self.showsSource; [self displayDocument];
+    self.text.selectedRange=NSMakeRange(0,0); [self.text scrollRangeToVisible:NSMakeRange(0,0)];
 }
 - (void)open:(id)sender { [(AppDelegate *)NSApp.delegate open:sender]; }
 - (void)reload:(id)sender { if(self.url) [self loadURL:self.url]; }
@@ -189,8 +213,31 @@ int main(int argc, const char **argv) {
             task_info(mach_task_self(),MACH_TASK_BASIC_INFO,(task_info_t)&info,&count);
             printf("Rendered %lu bytes → %lu characters in %.2f ms; RSS %.2f MiB; physical footprint %.2f MiB\n",(unsigned long)data.length,(unsigned long)result.length,(CFAbsoluteTimeGetCurrent()-start)*1000,info.resident_size/1048576.0,physicalMemoryMiB());
             if(!strcmp(argv[1],"--smoke-test") || !strcmp(argv[1],"--screenshot")) {
-                Viewer *v=[Viewer new]; [v.text.textStorage setAttributedString:result]; mdv_update_reading_layout(v.text); [v.window.contentView layoutSubtreeIfNeeded];
-                if(!strcmp(argv[1],"--smoke-test")) { v.search.stringValue=@"Markdown"; [v findNext:nil]; }
+                Viewer *v=[Viewer new]; v.source=[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                if([v.source hasPrefix:@"\uFEFF"]) v.source=[v.source substringFromIndex:1];
+                v.rendered=result; v.hasDocument=YES; v.viewButton.enabled=YES;
+                [v displayDocument]; [v.window.contentView layoutSubtreeIfNeeded];
+                if(!strcmp(argv[1],"--smoke-test")) {
+                    NSAttributedString *before=[v.text.textStorage copy];
+                    [v.viewButton performClick:nil];
+                    if(!v.showsSource || ![v.text.string isEqualToString:v.source] || v.text.editable) return 3;
+                    if(![[v.text.textStorage attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL] isEqual:[NSFont monospacedSystemFontOfSize:15 weight:NSFontWeightRegular]]) return 4;
+                    v.search.stringValue=@"Markdown"; [v findNext:nil];
+                    if(!v.text.selectedRange.length) return 5;
+                    [v.viewButton performClick:nil];
+                    if(v.showsSource || ![v.text.textStorage isEqualToAttributedString:before]) return 6;
+                    [v.viewButton performClick:nil];
+                    v.url=url;
+                    [v zoomIn:nil];
+                    NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:5];
+                    while(v.rendered==result && deadline.timeIntervalSinceNow>0)
+                        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+                    if(v.rendered==result || !v.showsSource || ![v.text.string isEqualToString:v.source]) return 7;
+                    if(![[v.text.textStorage attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL] isEqual:[NSFont monospacedSystemFontOfSize:17 weight:NSFontWeightRegular]]) return 8;
+                    [v.viewButton performClick:nil];
+                    if(![v.text.string isEqualToString:result.string]) return 9;
+                    [v findNext:nil];
+                }
                 if(!strcmp(argv[1],"--screenshot")) {
                     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
                     v.window.title=@"Markdown View";
@@ -204,7 +251,7 @@ int main(int argc, const char **argv) {
                 [snapshotView cacheDisplayInRect:snapshotView.bounds toBitmapImageRep:bitmap];
                 [[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:@"build/preview.png" atomically:YES];
                 if(v.text.editable || !v.text.selectable || !v.text.string.length || (!strcmp(argv[1],"--smoke-test") && !v.text.selectedRange.length)) return 2;
-                printf("Native window, read-only text storage, layout, and search smoke test passed.\n");
+                printf("Native window, source toggle, zoom/reload, read-only text storage, layout, and search smoke test passed.\n");
             }
             return 0;
         }

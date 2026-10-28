@@ -15,6 +15,7 @@ Markdown View is a small, read-only desktop app for **macOS and Linux**. It uses
 
 - Renders headings, bold, italic, strikethrough, quotes, lists, task lists, code, links, tables with wrapping cells, and local images.
 - Lets you select and copy text, search within a document, and adjust the text size.
+- Switches between rendered content and read-only, monospace Markdown source using **Show Markdown** / **Show Rendered** in the toolbar.
 - Opens multiple files in separate windows and resolves relative links against the document's folder.
 - On macOS, includes a **Quick Look extension** for Finder's Space-bar preview and an installer that makes it your default Markdown opener.
 - Does no recurring work while idle. Reload a changed file when you need to.
@@ -96,7 +97,7 @@ The parser supports CommonMark syntax with GitHub-style tables, strikethrough, t
 
 ## Performance
 
-The viewer uses one process, cached formatting attributes, and the OS's text layout system. It releases source data after rendering and has no background timers. Quick Look runs in a separate, on-demand macOS extension process.
+The viewer uses one process, cached formatting attributes, and the OS's text layout system. It keeps the source and rendered document available for instant view switching and has no background timers. Quick Look runs in a separate, on-demand macOS extension process.
 
 On the development machine (Apple Silicon, macOS 26.6.2), three consecutive launches of the [sample document](tests/sample.md) measured:
 
